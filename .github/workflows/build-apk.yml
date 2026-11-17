@@ -1,0 +1,57 @@
+name: Build NovaPay APK
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    name: Build debug APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK 35
+        run: sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+
+      # The project currently has no Gradle Wrapper, so setup-gradle installs
+      # the compatible Gradle version and exposes `gradle` on PATH.
+      - name: Set up Gradle 8.10.2
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Build APK
+        run: gradle --no-daemon --stacktrace clean :app:assembleDebug
+
+      - name: Prepare APK for download
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk dist/NovaPay.apk
+          sha256sum dist/NovaPay.apk > dist/SHA256SUMS.txt
+
+      # GitHub downloads workflow artifacts as a ZIP. The ZIP will contain
+      # NovaPay.apk and its SHA-256 checksum.
+      - name: Upload APK ZIP artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: NovaPay-debug-apk
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
